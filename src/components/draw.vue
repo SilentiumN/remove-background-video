@@ -6,6 +6,7 @@ const inputVideoRef = ref(null);
 const canvasRef = ref(null);
 const contextRef = ref(null);
 const mediaStream = ref(null)
+const test = ref(null)
 
 onMounted(() => {
   contextRef.value = canvasRef.value.getContext("2d");
@@ -49,6 +50,8 @@ const onResults = (results) => {
       canvasRef.value.width,
       canvasRef.value.height
   );
+  contextRef.value.filter = "blur(0)"
+
   contextRef.value.drawImage(
       results.segmentationMask,
       0,
@@ -57,39 +60,25 @@ const onResults = (results) => {
       canvasRef.value.height
   );
   // Only overwrite existing pixels.
-  contextRef.value.globalCompositeOperation = "source-out";
-  contextRef.value.fillStyle = "#000";
-  /*contextRef.value.drawImage(
-      inputVideoRef.value,
-      0,
-      0,
-      canvasRef.value.width,
-      canvasRef.value.height)*/
-  contextRef.value.fillStyle = "#00FF00";
-  contextRef.value.fillRect(
-      0,
-      0,
-      canvasRef.value.width,
-      canvasRef.value.height
-  );
+  contextRef.value.globalCompositeOperation = 'source-in';
+  contextRef.value.drawImage(
+      results.image, 0, 0, canvasRef.value.width, canvasRef.value.height);
 
   // Only overwrite missing pixels.
-  contextRef.value.globalCompositeOperation = "destination-atop";
-  contextRef.value.drawImage(
-      results.image,
-      0,
-      0,
-      canvasRef.value.width,
-      canvasRef.value.height
-  );
+  contextRef.value.globalCompositeOperation = 'destination-atop';
+  contextRef.value.filter = "blur(8px)"
 
+  contextRef.value.drawImage(
+      results.image, 0, 0, canvasRef.value.width, canvasRef.value.height);
   contextRef.value.restore();
 };
 
-watch(() => canvasRef, (newVal, oldVal) => {
+watch(canvasRef, (newVal, oldVal) => {
+  console.log(newVal, oldVal, "newVal", "oldVal")
   if (newVal && !oldVal) {
-    mediaStream.value = canvasRef.value.captureStream()
+    mediaStream.value = canvasRef.value.captureStream(25)
     console.log(mediaStream.value)
+    test.value.srcObject = mediaStream.value
   }
 })
 
@@ -99,7 +88,7 @@ watch(() => canvasRef, (newVal, oldVal) => {
   <div class="App">
     <video autoPlay ref="inputVideoRef" />
     <canvas ref="canvasRef" width="640" height="360" />
-    <video :src="mediaStream"/>
+    <video ref="test" autoplay/>
   </div>
 </template>
 
@@ -107,5 +96,9 @@ watch(() => canvasRef, (newVal, oldVal) => {
 video {
   width: 640px;
   height: 360px;
+}
+
+canvas {
+  display: none;
 }
 </style>
