@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import {ref, onMounted} from 'vue';
+import {ref, onMounted, computed, watch} from 'vue';
 import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
 
 const inputVideoRef = ref(null);
 const canvasRef = ref(null);
 const contextRef = ref(null);
+const mediaStream = ref(null)
 
 onMounted(() => {
   contextRef.value = canvasRef.value.getContext("2d");
@@ -85,12 +86,20 @@ const onResults = (results) => {
   contextRef.value.restore();
 };
 
+watch(() => canvasRef, (newVal, oldVal) => {
+  if (newVal && !oldVal) {
+    mediaStream.value = canvasRef.value.captureStream()
+    console.log(mediaStream.value)
+  }
+})
+
 </script>
 
 <template>
   <div class="App">
     <video autoPlay ref="inputVideoRef" />
     <canvas ref="canvasRef" width="640" height="360" />
+    <video :src="mediaStream"/>
   </div>
 </template>
 
