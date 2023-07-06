@@ -48,9 +48,10 @@ onMounted(async () => {
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
     input.muted = true;
-    input.autoplay = true;
     input.playsInline = true;
     input.srcObject = stream;
+    input.addEventListener('click', input.play)
+    input.click()
     sendToMediaPipe();
   });
 
