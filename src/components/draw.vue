@@ -47,11 +47,10 @@ onMounted(async () => {
     video: { width: { ideal: 640 }, height: { ideal: 360 } },
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-    input.setAttribute('muted', '')
-    input.setAttribute('playsInline', '')
     input.srcObject = stream;
-    input.addEventListener('click', input.play)
-    input.click()
+    input.muted = true;
+    input.autoplay = true;
+    input.playsInline = true;
     sendToMediaPipe();
   });
 
