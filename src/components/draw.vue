@@ -29,7 +29,7 @@ const params = ((width, height) => {
 
 onMounted(async () => {
   const sendToMediaPipe = async () => {
-    if (!inputVideoRef.value.videoWidth) {
+    if (!input.videoWidth) {
       requestAnimationFrame(sendToMediaPipe);
     } else {
       onProcced()
@@ -37,27 +37,25 @@ onMounted(async () => {
     }
   };
 
-  contextRef.value = canvasRef.value.getContext("2d");
+  const manager = new GoogleMeetSegmentationWorkerManager();
+  const input = document.createElement("video") as HTMLVideoElement;
+  const output = document.createElement("canvas") as HTMLCanvasElement;
+  const tmpCanvas = document.createElement("canvas") as HTMLCanvasElement;
+  await manager.init(config)
+
   const constraints = {
     video: { width: { ideal: 640 }, height: { ideal: 360 } },
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-    inputVideoRef.value.srcObject = stream;
+    input.autoplay = true;
+    input.playsInline = true;
+    input.srcObject = stream;
     sendToMediaPipe();
   });
 
 
-  const manager = new GoogleMeetSegmentationWorkerManager();
-  const input = inputVideoRef.value as HTMLVideoElement;
-  const output = canvasRef.value as HTMLCanvasElement;
-  const tmpCanvas = document.createElement("canvas");
-  document.querySelector(".App").appendChild(tmpCanvas)
-  await manager.init(config)
-
 
   const onProcced = () => {
-
-    console.log(input.videoWidth, input.videoHeight)
     tmpCanvas.width = input.videoWidth;
     tmpCanvas.height = input.videoHeight;
     tmpCanvas
@@ -81,43 +79,39 @@ onMounted(async () => {
       outputCtx.clearRect(
           0,
           0,
-          canvasRef.value.width,
-          canvasRef.value.height
+          output.width,
+          output.height
       );
 
       outputCtx.putImageData(mask, 0, 0);
       outputCtx.globalCompositeOperation = "source-atop";
       outputCtx.drawImage(tmpCanvas, 0, 0, output.width, output.height);
 
-      contextRef.value.globalCompositeOperation = 'source-in';
-      contextRef.value.drawImage(
+      outputCtx.globalCompositeOperation = 'source-in';
+      outputCtx.drawImage(
           tmpCanvas, 0, 0, output.width, output.height);
 
       // Only overwrite missing pixels.
-      contextRef.value.globalCompositeOperation = 'destination-atop';
-      contextRef.value.filter = "blur(8px)"
+      outputCtx.globalCompositeOperation = 'destination-atop';
+      outputCtx.filter = "blur(8px)"
 
-      contextRef.value.drawImage(
+      outputCtx.drawImage(
           tmpCanvas, 0, 0, output.width, output.height);
-      contextRef.value.restore();
+      outputCtx.restore();
     });
   }
+
+  mediaStream.value = output.captureStream()
+  test.value.srcObject = mediaStream.value
 })
 
-watch(canvasRef, (newVal, oldVal) => {
-  if (newVal && !oldVal) {
-    mediaStream.value = canvasRef.value.captureStream()
-    test.value.srcObject = mediaStream.value
-  }
-})
+
 
 </script>
 
 <template>
   <div class="App">
-    <video autoplay playsinline ref="inputVideoRef" />
-    <canvas ref="canvasRef" id="canvasRef" width="640" height="360" />
-    <video autoplay playsinline ref="test"/>
+    <video ref="test" playsinline autoplay/>
   </div>
 </template>
 
