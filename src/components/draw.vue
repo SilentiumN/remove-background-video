@@ -47,8 +47,8 @@ onMounted(async () => {
     video: { width: { ideal: 640 }, height: { ideal: 360 } },
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-    input.muted = true;
-    input.playsInline = true;
+    input.setAttribute('muted', '')
+    input.setAttribute('playsInline', '')
     input.srcObject = stream;
     input.addEventListener('click', input.play)
     input.click()
