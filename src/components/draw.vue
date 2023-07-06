@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import {ref, onMounted, computed, watch} from 'vue';
-import { SelfieSegmentation } from "@mediapipe/selfie_segmentation";
+import {
+  generateDefaultGoogleMeetSegmentationParams,
+  generateGoogleMeetSegmentationDefaultConfig,
+  GoogleMeetSegmentationWorkerManager,
+} from "@dannadori/googlemeet-segmentation-worker-js";
 
 const inputVideoRef = ref(null);
 const canvasRef = ref(null);
@@ -8,76 +12,100 @@ const contextRef = ref(null);
 const mediaStream = ref(null)
 const test = ref(null)
 
-onMounted(() => {
+const config = (() => {
+  const c = generateGoogleMeetSegmentationDefaultConfig();
+  c.modelKey = "160x96"; // option: "160x96", "128x128", "256x144", "256x256"
+  c.processOnLocal = true; // if you want to run prediction on webworker, set false.
+  c.useSimd = true; // if you want to use simd, set true.
+  return c;
+})();
+
+const params = ((width, height) => {
+  const p = generateDefaultGoogleMeetSegmentationParams();
+  p.processWidth = 640; // processing image width,  should be under 1000.
+  p.processHeight = 360; // processing image height, should be under 1000.
+  return p;
+})();
+
+onMounted(async () => {
+  const sendToMediaPipe = async () => {
+    if (!inputVideoRef.value.videoWidth) {
+      requestAnimationFrame(sendToMediaPipe);
+    } else {
+      onProcced()
+      requestAnimationFrame(sendToMediaPipe);
+    }
+  };
+
   contextRef.value = canvasRef.value.getContext("2d");
   const constraints = {
-    video: { width: { min: 1280 }, height: { min: 720 } },
+    video: { width: { ideal: 640 }, height: { ideal: 360 } },
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
     inputVideoRef.value.srcObject = stream;
     sendToMediaPipe();
   });
 
-  const selfieSegmentation = new SelfieSegmentation({
-    locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
-  });
 
-  selfieSegmentation.setOptions({
-    modelSelection: 1,
-    selfieMode: false,
-  });
+  const manager = new GoogleMeetSegmentationWorkerManager();
+  const input = inputVideoRef.value as HTMLVideoElement;
+  const output = canvasRef.value as HTMLCanvasElement;
+  const tmpCanvas = document.createElement("canvas");
+  document.querySelector(".App").appendChild(tmpCanvas)
+  await manager.init(config)
 
-  selfieSegmentation.onResults(onResults);
 
-  const sendToMediaPipe = async () => {
-    if (!inputVideoRef.value.videoWidth) {
-      console.log(inputVideoRef.value.videoWidth);
-      requestAnimationFrame(sendToMediaPipe);
-    } else {
-      await selfieSegmentation.send({ image: inputVideoRef.value });
-      requestAnimationFrame(sendToMediaPipe);
-    }
-  };
+  const onProcced = () => {
+
+    console.log(input.videoWidth, input.videoHeight)
+    tmpCanvas.width = input.videoWidth;
+    tmpCanvas.height = input.videoHeight;
+    tmpCanvas
+        .getContext("2d")!
+        .drawImage(input, 0, 0, tmpCanvas.width, tmpCanvas.height);
+    manager.predict(params, tmpCanvas).then((prediction) => {
+      if (!prediction) {
+        return;
+      }
+      output.width = params.processWidth;
+      output.height = params.processHeight;
+      const mask = new ImageData(
+          prediction,
+          params.processWidth,
+          params.processHeight
+      );
+      const outputCtx = output.getContext("2d")!;
+
+      outputCtx.save();
+      outputCtx.clearRect(
+          0,
+          0,
+          canvasRef.value.width,
+          canvasRef.value.height
+      );
+
+      outputCtx.putImageData(mask, 0, 0);
+      outputCtx.globalCompositeOperation = "source-atop";
+      outputCtx.drawImage(tmpCanvas, 0, 0, output.width, output.height);
+
+      contextRef.value.globalCompositeOperation = 'source-in';
+      contextRef.value.drawImage(
+          tmpCanvas, 0, 0, output.width, output.height);
+
+      // Only overwrite missing pixels.
+      contextRef.value.globalCompositeOperation = 'destination-atop';
+      contextRef.value.filter = "blur(8px)"
+
+      contextRef.value.drawImage(
+          tmpCanvas, 0, 0, output.width, output.height);
+      contextRef.value.restore();
+    });
+  }
 })
 
-const onResults = (results) => {
-
-  contextRef.value.save();
-  contextRef.value.clearRect(
-      0,
-      0,
-      canvasRef.value.width,
-      canvasRef.value.height
-  );
-  contextRef.value.filter = "blur(0)"
-
-  contextRef.value.drawImage(
-      results.segmentationMask,
-      0,
-      0,
-      canvasRef.value.width,
-      canvasRef.value.height
-  );
-  // Only overwrite existing pixels.
-  contextRef.value.globalCompositeOperation = 'source-in';
-  contextRef.value.drawImage(
-      results.image, 0, 0, canvasRef.value.width, canvasRef.value.height);
-
-  // Only overwrite missing pixels.
-  contextRef.value.globalCompositeOperation = 'destination-atop';
-  contextRef.value.filter = "blur(8px)"
-
-  contextRef.value.drawImage(
-      results.image, 0, 0, canvasRef.value.width, canvasRef.value.height);
-  contextRef.value.restore();
-};
-
 watch(canvasRef, (newVal, oldVal) => {
-  console.log(newVal, oldVal, "newVal", "oldVal")
   if (newVal && !oldVal) {
-    mediaStream.value = canvasRef.value.captureStream(25)
-    console.log(mediaStream.value)
+    mediaStream.value = canvasRef.value.captureStream()
     test.value.srcObject = mediaStream.value
   }
 })
@@ -86,9 +114,9 @@ watch(canvasRef, (newVal, oldVal) => {
 
 <template>
   <div class="App">
-    <video autoPlay ref="inputVideoRef" />
-    <canvas ref="canvasRef" width="640" height="360" />
-    <video ref="test" autoplay/>
+    <video autoplay playsinline ref="inputVideoRef" />
+    <canvas ref="canvasRef" id="canvasRef" width="640" height="360" />
+    <video autoplay playsinline ref="test"/>
   </div>
 </template>
 
@@ -96,9 +124,5 @@ watch(canvasRef, (newVal, oldVal) => {
 video {
   width: 640px;
   height: 360px;
-}
-
-canvas {
-  display: none;
 }
 </style>
