@@ -22,10 +22,10 @@ const config = (() => {
 
 const params = ((width, height) => {
   const p = generateDefaultGoogleMeetSegmentationParams();
-  p.processWidth = 640; // processing image width,  should be under 1000.
-  p.processHeight = 360; // processing image height, should be under 1000.
+  p.processWidth = width; // processing image width,  should be under 1000.
+  p.processHeight = height; // processing image height, should be under 1000.
   return p;
-})();
+})
 
 onMounted(async () => {
   const sendToMediaPipe = async () => {
@@ -63,16 +63,17 @@ onMounted(async () => {
     tmpCanvas
         .getContext("2d")!
         .drawImage(input, 0, 0, tmpCanvas.width, tmpCanvas.height);
-    manager.predict(params, tmpCanvas).then((prediction) => {
+    const paramsWithNewWidth = params(tmpCanvas.width, tmpCanvas.height)
+    manager.predict(paramsWithNewWidth, tmpCanvas).then((prediction) => {
       if (!prediction) {
         return;
       }
-      output.width = params.processWidth;
-      output.height = params.processHeight;
+      output.width = paramsWithNewWidth.processWidth;
+      output.height = paramsWithNewWidth.processHeight;
       const mask = new ImageData(
           prediction,
-          params.processWidth,
-          params.processHeight
+          paramsWithNewWidth.processWidth,
+          paramsWithNewWidth.processHeight
       );
       const outputCtx = output.getContext("2d")!;
 
