@@ -5,6 +5,8 @@ import {
   generateGoogleMeetSegmentationDefaultConfig,
   GoogleMeetSegmentationWorkerManager,
 } from "@dannadori/googlemeet-segmentation-worker-js";
+import forest from "../assets/forest.jpeg"
+import office from "../assets/office.jpeg"
 
 const inputVideoRef = ref(null);
 const canvasRef = ref(null);
@@ -14,16 +16,31 @@ const test = ref(null)
 
 const config = (() => {
   const c = generateGoogleMeetSegmentationDefaultConfig();
-  c.modelKey = "160x96"; // option: "160x96", "128x128", "256x144", "256x256"
+  c.modelKey = "256x144"; // option: "160x96", "128x128", "256x144", "256x256"
   c.processOnLocal = true; // if you want to run prediction on webworker, set false.
-  c.useSimd = true; // if you want to use simd, set true.
+  c.useSimd = false; // if you want to use simd, set true.
   return c;
 })();
 
 const params = ((width, height) => {
   const p = generateDefaultGoogleMeetSegmentationParams();
-  p.processWidth = width; // processing image width,  should be under 1000.
-  p.processHeight = height; // processing image height, should be under 1000.
+  const aspectRatio = width/height;
+  let scale: number
+
+  if (aspectRatio > 1) {
+    scale = width / 640;
+  }
+  else {
+    scale = height / 640;
+  }
+  p.processWidth = width / scale; // processing image width,  should be under 1000.
+  p.processHeight = height / scale; // processing image height, should be under 1000.
+  p.jbfPostProcess = 3;
+  p.jbfD = 0;
+  p.jbfSigmaC = 10;
+  p. jbfSigmaS = 0;
+  p.threshold = 0.3;
+  console.log(p)
   return p;
 })
 
@@ -41,10 +58,12 @@ onMounted(async () => {
   const input = document.createElement("video") as HTMLVideoElement;
   const output = document.createElement("canvas") as HTMLCanvasElement;
   const tmpCanvas = document.createElement("canvas") as HTMLCanvasElement;
+  const image = document.createElement("img") as HTMLImageElement;
+  image.src = office;
   await manager.init(config)
 
   const constraints = {
-    video: { width: { ideal: 640 }, height: { ideal: 360 } },
+    video: { width: { ideal: 1280 }, height: { ideal: 720 } },
   };
   navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
     input.autoplay = true;
@@ -84,12 +103,8 @@ onMounted(async () => {
       );
 
       outputCtx.putImageData(mask, 0, 0);
-      outputCtx.globalCompositeOperation = "source-atop";
+      outputCtx.globalCompositeOperation = "source-in";
       outputCtx.drawImage(tmpCanvas, 0, 0, output.width, output.height);
-
-      outputCtx.globalCompositeOperation = 'source-in';
-      outputCtx.drawImage(
-          tmpCanvas, 0, 0, output.width, output.height);
 
       // Only overwrite missing pixels.
       outputCtx.globalCompositeOperation = 'destination-atop';
@@ -97,6 +112,7 @@ onMounted(async () => {
 
       outputCtx.drawImage(
           tmpCanvas, 0, 0, output.width, output.height);
+
       outputCtx.restore();
     });
   }
